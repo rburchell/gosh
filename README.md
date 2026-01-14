@@ -12,3 +12,12 @@ The idea of this repository is to provide a place to put it all.
 **NOTE**: I provide no other guarentees about quality, usability, or security.
 
 Depend on this at your own risk.
+
+# hacking
+
+You should install the pre-commit hook:
+
+``` sh
+cp .github/pre-commit .git/hooks/
+chmod +x .git/hooks/pre-commit
+```
