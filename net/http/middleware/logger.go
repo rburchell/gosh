@@ -5,12 +5,15 @@
 package middleware
 
 import (
+	"github.com/rburchell/gosh/log/slogx"
 	"log/slog"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 )
+
+var log *slog.Logger = slogx.NewCategory("http", slogx.TextHandler, slog.LevelDebug)
 
 // list of locations we will trust for reporting headers
 var trustedNets []*net.IPNet
@@ -104,7 +107,7 @@ func LogRequests(next http.Handler) http.Handler {
 			level = slog.LevelWarn
 		}
 
-		slog.Log(r.Context(), level, "http",
+		log.Log(r.Context(), level, "Finished",
 			slog.Int("status", recw.status),
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
