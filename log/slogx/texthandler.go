@@ -9,9 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"runtime"
-	"strings"
 )
 
 // Returns a new slog.Handler which will pretty-print all records, and write them to w.
@@ -38,8 +35,6 @@ func leftJustified(str string, width int) string {
 	}
 	return str
 }
-
-var testMode bool
 
 func (h textHandler) Handle(ctx context.Context, r slog.Record) error {
 	const (
@@ -71,30 +66,6 @@ func (h textHandler) Handle(ctx context.Context, r slog.Record) error {
 		kvstr += fmt.Sprintf("%s%s%s=%s%s%s ", keyColor, attr.Key, resetColor, valueColor, attr.Value, resetColor)
 		return true
 	})
-
-	// Append caller info if available
-	if r.PC != 0 {
-		// TODO: This could be replaced with Record.Source() if we assume Go 1.25
-		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
-		fileName := frame.File
-
-		// Drop homedir to make it slightly less awkward to read
-		// It's a shame these paths are so awkwardly long.. I'd really like to make them shorter somehow.
-		// FIXME: This doesn't really change, so we could cache it during init()?
-		homeDir, err := os.UserHomeDir()
-		if err == nil {
-			fileName = strings.ReplaceAll(fileName, homeDir, "~")
-		}
-		funcName := frame.Function
-		lastDot := strings.LastIndex(funcName, ".")
-		funcName = funcName[lastDot+1:]
-		if testMode {
-			fileName = "/testmode.go"
-			frame.Line = 0
-		}
-		kvstr += fmt.Sprintf("%sfile%s=%s%s:%d%s ", keyColor, resetColor, valueColor, fileName, frame.Line, resetColor)
-		kvstr += fmt.Sprintf("%sfunc%s=%s%s%s ", keyColor, resetColor, valueColor, funcName, resetColor)
-	}
 
 	// Trim trailing space
 	if len(kvstr) > 0 {
