@@ -14,8 +14,8 @@
 // Using both of these functionalities might look like this:
 //
 //		// In library/app code: create two categories, ideally as package level vars
-//	    var db *slog.Logger  = slogx.NewCategory("slogx", slogx.TextHandler, slog.LevelInfo)
-//	    var net *slog.Logger = slogx.NewCategory("slogx", slogx.TextHandler, slog.LevelDebug)
+//	    var db *slog.Logger  = slogx.NewCategory("db", slogx.TextHandler, slog.LevelInfo)
+//	    var net *slog.Logger = slogx.NewCategory("net", slogx.TextHandler, slog.LevelDebug)
 //
 //		// And log to them
 //		db.Debug("debug dropped 1")     // dropped; db logging is LevelInfo+
