@@ -12,15 +12,11 @@
 //
 // When looking up keys in the environment or envkv, keys are forced to uppercase, to match convention.
 //
-// The API a subset of the stdlib's flag package, i.e:
-//
-//	var flagvar string
-//
-//	func init() {
-//	    flagx.StringVar(&flagvar, "flagname", "1234", "help message for flagname")
-//	}
+// The API is a subset of the stdlib's flag package, i.e:
 //
 //	func main() {
+//	    var flagvar string
+//	    flagx.StringVar(&flagvar, "flagname", "1234", "help message for flagname")
 //	    flagx.Parse()
 //	}
 //
