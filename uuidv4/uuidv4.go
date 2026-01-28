@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/rburchell/gosh/th"
@@ -125,4 +126,24 @@ func FromString(s string) (UUID, error) {
 // Returns UUID parsed from string representation, or panic.
 func MustFromString(s string) UUID {
 	return th.Must(FromString(s))
+}
+
+var _ json.Unmarshaler = &UUID{}
+var _ json.Marshaler = UUID{}
+
+func (u UUID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.String())
+}
+
+func (u *UUID) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	uuid, err := FromString(s)
+	if err != nil {
+		return err
+	}
+	*u = uuid
+	return nil
 }

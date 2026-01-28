@@ -5,6 +5,7 @@
 package uuidv4
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -138,5 +139,42 @@ func TestMust(t *testing.T) {
 	s := u.String()
 	if len(s) != 36 {
 		t.Fatalf("expected UUID string length 36, got %d", len(s))
+	}
+}
+
+func TestUUIDJSON(t *testing.T) {
+	uuid, err := FromString(uuid1)
+	if err != nil {
+		t.Fatalf("FromString failed: %v", err)
+	}
+
+	data, err := json.Marshal(uuid)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("Unmarshal to string failed: %v", err)
+	}
+	if s != uuid1 {
+		t.Errorf("Expected JSON string %q, got %q", uuid1, s)
+	}
+
+	var decoded UUID
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal to UUID failed: %v", err)
+	}
+	if !decoded.Equal(uuid) {
+		t.Errorf("Expected UUID %v, got %v", uuid, decoded)
+	}
+}
+
+func TestUUIDJSON_Invalid(t *testing.T) {
+	invalid := `"not-a-uuid"`
+
+	var u UUID
+	if err := json.Unmarshal([]byte(invalid), &u); err == nil {
+		t.Errorf("Expected error for invalid UUID, got nil")
 	}
 }
