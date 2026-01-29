@@ -84,6 +84,16 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
+// This allows use in a http.ResponseController, which means that our wrapping is a little less of a pain.
+// We still hide interfaces (i.e. http.Flusher), but the ResponseController allows hitting the underlying
+// implementations anyway.
+//
+// This is pretty disgusting, but since I don't want to deal with the combinatorial explosion of interfaces,
+// this feels like the path of least resistance.
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
 // LogRequests ... logs requests.
 func LogRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
