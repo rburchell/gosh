@@ -79,7 +79,7 @@ func (b *Builder) ListenAndServe(addr string) error {
 	}
 	friendlyAddr := addr
 	if strings.HasPrefix(addr, ":") {
-		friendlyAddr = "localhost" + addr
+		friendlyAddr = "localhost" + addr + " (on all interfaces)"
 	}
 	log.Debug("Hosting routes", "count", len(b.routes), "addr", "http://"+friendlyAddr)
 	return http.ListenAndServe(addr, b.wrapped)
