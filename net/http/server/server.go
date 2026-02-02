@@ -13,11 +13,18 @@
 //		w.Write([]byte("pong"))
 //	}
 //
+//	func handleTopSecret(w http.ResponseWriter, r *http.Request) {
+//		w.Write([]byte("you're authenticated using basic auth"))
+//	}
+//
+//	auth := middleware.StaticBasicAuthenticator{"top": "gun"}
+//
 //	server.Build(nil).
 //	HandleFunc("/ping", handlePingPong).
+//	Handle("/topsecret/", middleware.BasicAuth(auth, http.HandlerFunc(handleTopSecret))).
 //	ListenAndServeOrDie(":8080")
 //
-// The snippet above will respond to /ping on :8080, otherwise, terminate if it can't listen.
+// The snippet above will respond to requests on :8080, otherwise, terminate if it can't listen.
 package server
 
 import (
