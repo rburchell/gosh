@@ -102,8 +102,15 @@ func Parse() {
 		return int(ival)
 	}
 
+	helplines := []string{}
+
 	for _, v := range allVars {
 		upperKey := strings.ToUpper(v.key)
+		if v.defaultVal != nil {
+			helplines = append(helplines, fmt.Sprintf("%s - %s (default %q)", upperKey, v.help, v.defaultVal))
+		} else {
+			helplines = append(helplines, fmt.Sprintf("%s - %s", upperKey, v.help))
+		}
 
 		// 1. Write from envkv
 		for _, val := range envkvs {
@@ -134,6 +141,17 @@ func Parse() {
 			default:
 				panic(fmt.Sprintf("unsupported env type: %T", v.val))
 			}
+		}
+	}
+
+	usage := flag.Usage
+	flag.Usage = func() {
+		usage()
+		fmt.Fprintf(flag.CommandLine.Output(), "\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Command line options also fall back to the environment:\n")
+
+		for _, help := range helplines {
+			fmt.Fprintf(flag.CommandLine.Output(), "  %s\n", help)
 		}
 	}
 
