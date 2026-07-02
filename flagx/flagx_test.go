@@ -121,6 +121,35 @@ func TestFromFlag(t *testing.T) {
 	}
 }
 
+func TestInvalidValues(t *testing.T) {
+	defer clearVars()
+
+	var i int
+	var d time.Duration
+
+	IntVar(&i, "int", 7, "help")
+	DurationVar(&d, "dur", 8*time.Second, "help")
+
+	// Invalid values should be rejected, leaving the defaults in place.
+	os.Setenv("INT", "notanint")
+	os.Setenv("DUR", "notaduration")
+	defer os.Unsetenv("INT")
+	defer os.Unsetenv("DUR")
+
+	origArgs := os.Args
+	os.Args = []string{"cmd"}
+	defer func() { os.Args = origArgs }()
+
+	Parse()
+
+	if i != 7 {
+		t.Errorf("expected default 7 on invalid int, got %d", i)
+	}
+	if d != 8*time.Second {
+		t.Errorf("expected default 8s on invalid duration, got %v", d)
+	}
+}
+
 func TestDurationDefault(t *testing.T) {
 	defer clearVars()
 

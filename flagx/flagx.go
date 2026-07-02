@@ -110,15 +110,33 @@ func Parse() {
 		}
 		return true
 	}
-	toInt := func(v string) int {
-		var ival int64
-		ival, err = strconv.ParseInt(v, 10, 64)
-		return int(ival)
-	}
-	toDuration := func(v string) time.Duration {
-		var d time.Duration
-		d, err = time.ParseDuration(v)
-		return d
+
+	// assign parses raw into the value pointed to by valPtr. On a parse
+	// error the existing value (i.e. the default, or whatever an earlier
+	// source set) is left untouched and the error is logged.
+	assign := func(source, key, raw string, valPtr any) {
+		switch tv := valPtr.(type) {
+		case *string:
+			*tv = raw
+		case *bool:
+			*tv = toBool(raw)
+		case *int:
+			ival, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil {
+				log.Error("invalid int", "source", source, "key", key, "value", raw, "err", err)
+				return
+			}
+			*tv = int(ival)
+		case *time.Duration:
+			d, err := time.ParseDuration(raw)
+			if err != nil {
+				log.Error("invalid duration", "source", source, "key", key, "value", raw, "err", err)
+				return
+			}
+			*tv = d
+		default:
+			panic(fmt.Sprintf("unsupported %s type: %T", source, valPtr))
+		}
 	}
 
 	helplines := []string{}
@@ -134,36 +152,13 @@ func Parse() {
 		// 1. Write from envkv
 		for _, val := range envkvs {
 			if val.Key == upperKey {
-				switch tv := v.val.(type) {
-				case *string:
-					*tv = val.Value
-				case *bool:
-					*tv = toBool(val.Value)
-				case *int:
-					*tv = toInt(val.Value)
-				case *time.Duration:
-					*tv = toDuration(val.Value)
-				default:
-					panic(fmt.Sprintf("unsupported envkv type: %T", v.val))
-				}
+				assign("envkv", upperKey, val.Value, v.val)
 			}
 		}
 
 		// 2: Write from environment
-		val, ok := os.LookupEnv(upperKey)
-		if ok {
-			switch tv := v.val.(type) {
-			case *string:
-				*tv = val
-			case *bool:
-				*tv = toBool(val)
-			case *int:
-				*tv = toInt(val)
-			case *time.Duration:
-				*tv = toDuration(val)
-			default:
-				panic(fmt.Sprintf("unsupported env type: %T", v.val))
-			}
+		if val, ok := os.LookupEnv(upperKey); ok {
+			assign("env", upperKey, val, v.val)
 		}
 	}
 
