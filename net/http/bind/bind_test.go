@@ -534,3 +534,114 @@ func TestBindJSON(t *testing.T) {
 		})
 	}
 }
+
+// durationish is a type with a custom json.Unmarshaler, to prove BindJSON
+// respects Unmarshaler implementations on nested fields.
+type durationish struct{ raw string }
+
+func (d *durationish) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, &d.raw)
+}
+
+type nestedState struct {
+	Name string       `json:"name"`
+	TTL  *durationish `json:"ttl,omitempty"`
+}
+
+type nestedProject struct {
+	Name      string        `json:"name" binding:"required"`
+	Assignees []string      `json:"assignees"`
+	States    []nestedState `json:"states"`
+	Owner     *nestedState  `json:"owner,omitempty"`
+	Secret    string        `json:"-"`
+}
+
+func jsonReq(body string) *http.Request {
+	return &http.Request{Body: io.NopCloser(strings.NewReader(body))}
+}
+
+// TestBindJSONNested covers nested structs, slices of structs, pointers, and
+// custom json.Unmarshalers — none of which the field-by-field reflection path
+// could decode.
+func TestBindJSONNested(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		want    nestedProject
+		wantErr bool
+	}{
+		{
+			name: "full nested payload",
+			body: `{"name":"demo","assignees":["a","b"],` +
+				`"states":[{"name":"Backlog"},{"name":"Done","ttl":"168h"}],` +
+				`"owner":{"name":"robin"}}`,
+			want: nestedProject{
+				Name:      "demo",
+				Assignees: []string{"a", "b"},
+				States: []nestedState{
+					{Name: "Backlog"},
+					{Name: "Done", TTL: &durationish{raw: "168h"}},
+				},
+				Owner: &nestedState{Name: "robin"},
+			},
+		},
+		{
+			name: "optional pointer omitted stays nil",
+			body: `{"name":"demo","states":[{"name":"Backlog"}]}`,
+			want: nestedProject{
+				Name:   "demo",
+				States: []nestedState{{Name: "Backlog"}},
+			},
+		},
+		{
+			name: "json:- field is never populated",
+			body: `{"name":"demo","Secret":"leak"}`,
+			want: nestedProject{Name: "demo"},
+		},
+		{
+			name:    "missing required name",
+			body:    `{"states":[{"name":"Backlog"}]}`,
+			want:    nestedProject{States: []nestedState{{Name: "Backlog"}}},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got nestedProject
+			err := BindJSON(jsonReq(tt.body), &got)
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected error, got none")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestBindJSONRequiredTagOptions guards against the regression where a json tag
+// carrying options (e.g. "title,omitempty") was used verbatim as the lookup
+// key, so a present required field was mis-detected as missing.
+func TestBindJSONRequiredTagOptions(t *testing.T) {
+	type input struct {
+		Title string `json:"title,omitempty" binding:"required"`
+	}
+	t.Run("present is accepted", func(t *testing.T) {
+		var got input
+		if err := BindJSON(jsonReq(`{"title":"hi"}`), &got); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Title != "hi" {
+			t.Errorf("got %q, want %q", got.Title, "hi")
+		}
+	})
+	t.Run("absent is rejected", func(t *testing.T) {
+		var got input
+		if err := BindJSON(jsonReq(`{}`), &got); err == nil {
+			t.Errorf("expected error for missing required field, got none")
+		}
+	})
+}

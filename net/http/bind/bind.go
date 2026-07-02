@@ -28,8 +28,10 @@ package bind
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
+	"strings"
 )
 
 // Validate that all fields on obj with a required binding were placed in writtenFields.
@@ -164,24 +166,38 @@ func BindQuery[T any](r *http.Request, obj *T) error {
 func BindJSON[T any](r *http.Request, obj *T) error {
 	defer r.Body.Close()
 
-	var data map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+
+	// Let encoding/json do the decoding: it correctly handles nested structs,
+	// slices, maps, pointers, and custom json.Unmarshalers, which the
+	// field-by-field reflection path in setFieldValue does not.
+	if err := json.Unmarshal(body, obj); err != nil {
+		return err
+	}
+
+	// Separately record which top-level keys were present, so binding:"required"
+	// can still be enforced.
+	var present map[string]json.RawMessage
+	if err := json.Unmarshal(body, &present); err != nil {
 		return err
 	}
 
 	writtenFields := make(map[string]struct{})
-	err := forEachField(obj, "json", func(field reflect.StructField, fv reflect.Value, tag string) error {
-		value, ok := data[tag]
-		if !ok {
+	err = forEachField(obj, "json", func(field reflect.StructField, fv reflect.Value, tag string) error {
+		// A json tag may carry options (e.g. "name,omitempty"); the key is the
+		// part before the first comma. "-" means the field is not serialized.
+		name, _, _ := strings.Cut(tag, ",")
+		if name == "-" {
 			return nil
 		}
-		if err := setFieldValue(field.Name, fv, value); err != nil {
-			return err
+		if _, ok := present[name]; ok {
+			writtenFields[field.Name] = struct{}{}
 		}
-		writtenFields[field.Name] = struct{}{}
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
