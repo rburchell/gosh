@@ -32,6 +32,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rburchell/gosh/log/slogx"
 	"github.com/rburchell/gosh/text/envkv"
@@ -72,6 +73,19 @@ func IntVar(val *int, key string, defaultVal int, help string) {
 	flag.IntVar(val, key, defaultVal, help)
 }
 
+// See [flag.DurationVar]
+func DurationVar(val *time.Duration, key string, defaultVal time.Duration, help string) {
+	allVars = append(allVars, varRec{key, val, defaultVal, help})
+	flag.DurationVar(val, key, defaultVal, help)
+}
+
+// See [flag.Duration]
+func Duration(key string, defaultVal time.Duration, help string) *time.Duration {
+	val := new(time.Duration)
+	DurationVar(val, key, defaultVal, help)
+	return val
+}
+
 // See [flag.Parse]
 //
 // The one difference here is that values are also looked for in envkv (as a .envkv file),
@@ -101,6 +115,11 @@ func Parse() {
 		ival, err = strconv.ParseInt(v, 10, 64)
 		return int(ival)
 	}
+	toDuration := func(v string) time.Duration {
+		var d time.Duration
+		d, err = time.ParseDuration(v)
+		return d
+	}
 
 	helplines := []string{}
 
@@ -122,6 +141,8 @@ func Parse() {
 					*tv = toBool(val.Value)
 				case *int:
 					*tv = toInt(val.Value)
+				case *time.Duration:
+					*tv = toDuration(val.Value)
 				default:
 					panic(fmt.Sprintf("unsupported envkv type: %T", v.val))
 				}
@@ -138,6 +159,8 @@ func Parse() {
 				*tv = toBool(val)
 			case *int:
 				*tv = toInt(val)
+			case *time.Duration:
+				*tv = toDuration(val)
 			default:
 				panic(fmt.Sprintf("unsupported env type: %T", v.val))
 			}
