@@ -167,6 +167,38 @@ func TestDurationDefault(t *testing.T) {
 	}
 }
 
+func TestFlagSetVisit(t *testing.T) {
+	fs := NewFlagSet("t", ContinueOnError)
+
+	var s string
+	var b bool
+	var i int
+
+	fs.StringVar(&s, "str", "def", "help")
+	fs.BoolVar(&b, "bool", false, "help")
+	fs.IntVar(&i, "int", 1, "help")
+
+	if err := fs.Parse([]string{"-int=42", "-str=x"}); err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	// Visit reports only the flags that were set, in lexical order.
+	var seen []string
+	fs.Visit(func(f *Flag) { seen = append(seen, f.Name+"="+f.Value.String()) })
+
+	if len(seen) != 2 || seen[0] != "int=42" || seen[1] != "str=x" {
+		t.Errorf("unexpected Visit result: %v", seen)
+	}
+
+	// VisitAll reports every flag, set or not, in lexical order.
+	var all []string
+	fs.VisitAll(func(f *Flag) { all = append(all, f.Name) })
+
+	if len(all) != 3 || all[0] != "bool" || all[1] != "int" || all[2] != "str" {
+		t.Errorf("unexpected VisitAll result: %v", all)
+	}
+}
+
 func TestValueHelpers(t *testing.T) {
 	defer clearVars()
 

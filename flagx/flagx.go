@@ -58,6 +58,9 @@ var log *slog.Logger = slogx.NewCategory("flagx", slogx.TextHandler, slog.LevelD
 // through to the underlying flag package.
 type ErrorHandling = flag.ErrorHandling
 
+// Flag represents the state of a flag. It is an alias for [flag.Flag].
+type Flag = flag.Flag
+
 // These constants mirror [flag]'s error handling modes. See [flag.ErrorHandling].
 const (
 	ContinueOnError = flag.ContinueOnError
@@ -159,6 +162,14 @@ func (f *FlagSet) Arg(i int) string { return f.fs.Arg(i) }
 
 // NArg returns the number of non-flag arguments. See [flag.FlagSet.NArg].
 func (f *FlagSet) NArg() int { return f.fs.NArg() }
+
+// Visit visits the flags in lexicographical order, calling fn for each. It
+// visits only those flags that have been set. See [flag.FlagSet.Visit].
+func (f *FlagSet) Visit(fn func(*Flag)) { f.fs.Visit(fn) }
+
+// VisitAll visits the flags in lexicographical order, calling fn for each. It
+// visits all flags, even those not set. See [flag.FlagSet.VisitAll].
+func (f *FlagSet) VisitAll(fn func(*Flag)) { f.fs.VisitAll(fn) }
 
 func toBool(v string) bool {
 	if v == "false" || v == "" {
@@ -310,6 +321,14 @@ func Arg(i int) string { return CommandLine.Arg(i) }
 
 // NArg returns the number of non-flag command-line arguments. See [flag.NArg].
 func NArg() int { return CommandLine.NArg() }
+
+// Visit visits the command-line flags in lexicographical order, calling fn for
+// each. It visits only those flags that have been set. See [flag.Visit].
+func Visit(fn func(*Flag)) { CommandLine.Visit(fn) }
+
+// VisitAll visits the command-line flags in lexicographical order, calling fn
+// for each. It visits all flags, even those not set. See [flag.VisitAll].
+func VisitAll(fn func(*Flag)) { CommandLine.VisitAll(fn) }
 
 // Parse parses the command-line flags from os.Args[1:]. See [flag.Parse].
 //
