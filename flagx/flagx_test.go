@@ -5,6 +5,7 @@
 package flagx
 
 import (
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -163,5 +164,100 @@ func TestDurationDefault(t *testing.T) {
 
 	if *d != 3*time.Second {
 		t.Errorf("expected default 3s, got %v", *d)
+	}
+}
+
+func TestFlagSetParse(t *testing.T) {
+	fs := NewFlagSet("t", ContinueOnError)
+
+	var s string
+	var b bool
+	var i int
+	var d time.Duration
+
+	fs.StringVar(&s, "str", "def", "help")
+	fs.BoolVar(&b, "bool", false, "help")
+	fs.IntVar(&i, "int", 1, "help")
+	fs.DurationVar(&d, "dur", time.Second, "help")
+
+	if err := fs.Parse([]string{"-str=fromcmd", "-bool=true", "-int=42", "-dur=2h"}); err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if s != "fromcmd" {
+		t.Errorf("expected 'fromcmd', got %q", s)
+	}
+	if b != true {
+		t.Errorf("expected bool true, got %v", b)
+	}
+	if i != 42 {
+		t.Errorf("expected int 42, got %d", i)
+	}
+	if d != 2*time.Hour {
+		t.Errorf("expected 2h, got %v", d)
+	}
+}
+
+func TestFlagSetArgs(t *testing.T) {
+	fs := NewFlagSet("t", ContinueOnError)
+
+	var s string
+	fs.StringVar(&s, "str", "def", "help")
+
+	if err := fs.Parse([]string{"-str=x", "one", "two", "three"}); err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if got := fs.NArg(); got != 3 {
+		t.Errorf("expected NArg 3, got %d", got)
+	}
+	if got := fs.Args(); len(got) != 3 || got[0] != "one" || got[2] != "three" {
+		t.Errorf("unexpected Args: %v", got)
+	}
+	if got := fs.Arg(1); got != "two" {
+		t.Errorf("expected Arg(1) 'two', got %q", got)
+	}
+}
+
+func TestFlagSetParseError(t *testing.T) {
+	fs := NewFlagSet("t", ContinueOnError)
+
+	var i int
+	fs.IntVar(&i, "int", 7, "help")
+
+	// Silence the usage/error output that ContinueOnError writes on failure.
+	fs.fs.SetOutput(io.Discard)
+
+	// ContinueOnError returns the parse error rather than exiting the process.
+	if err := fs.Parse([]string{"-int=notanint"}); err == nil {
+		t.Fatal("expected error on invalid flag, got nil")
+	}
+}
+
+func TestFlagSetEnvOverlay(t *testing.T) {
+	fs := NewFlagSet("t", ContinueOnError)
+
+	var s string
+	var i int
+
+	fs.StringVar(&s, "str", "def", "help")
+	fs.IntVar(&i, "int", 1, "help")
+
+	// envkv provides str; environment overrides int (and would override str,
+	// but we leave str to prove envkv is consulted).
+	os.WriteFile(".envkv", []byte("STR=fromenvkv\nINT=100\n"), 0644)
+	defer os.Remove(".envkv")
+	os.Setenv("INT", "200")
+	defer os.Unsetenv("INT")
+
+	if err := fs.Parse([]string{}); err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if s != "fromenvkv" {
+		t.Errorf("expected 'fromenvkv' from envkv, got %q", s)
+	}
+	if i != 200 {
+		t.Errorf("expected int 200 from environment overriding envkv, got %d", i)
 	}
 }
