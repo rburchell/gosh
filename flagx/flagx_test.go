@@ -167,6 +167,60 @@ func TestDurationDefault(t *testing.T) {
 	}
 }
 
+func TestValueHelpers(t *testing.T) {
+	defer clearVars()
+
+	s := String("str", "def", "help")
+	b := Bool("bool", false, "help")
+	i := Int("int", 1, "help")
+	d := Duration("dur", time.Second, "help")
+
+	origArgs := os.Args
+	os.Args = []string{"cmd", "-str=fromcmd", "-bool=true", "-int=42", "-dur=2h"}
+	defer func() { os.Args = origArgs }()
+
+	Parse()
+
+	if *s != "fromcmd" {
+		t.Errorf("expected 'fromcmd', got %q", *s)
+	}
+	if *b != true {
+		t.Errorf("expected bool true, got %v", *b)
+	}
+	if *i != 42 {
+		t.Errorf("expected int 42, got %d", *i)
+	}
+	if *d != 2*time.Hour {
+		t.Errorf("expected 2h, got %v", *d)
+	}
+}
+
+func TestFlagSetValueHelpers(t *testing.T) {
+	fs := NewFlagSet("t", ContinueOnError)
+
+	s := fs.String("str", "def", "help")
+	b := fs.Bool("bool", false, "help")
+	i := fs.Int("int", 1, "help")
+	d := fs.Duration("dur", time.Second, "help")
+
+	if err := fs.Parse([]string{"-str=fromcmd", "-bool=true", "-int=42", "-dur=2h"}); err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if *s != "fromcmd" {
+		t.Errorf("expected 'fromcmd', got %q", *s)
+	}
+	if *b != true {
+		t.Errorf("expected bool true, got %v", *b)
+	}
+	if *i != 42 {
+		t.Errorf("expected int 42, got %d", *i)
+	}
+	if *d != 2*time.Hour {
+		t.Errorf("expected 2h, got %v", *d)
+	}
+}
+
 func TestFlagSetParse(t *testing.T) {
 	fs := NewFlagSet("t", ContinueOnError)
 

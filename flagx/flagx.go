@@ -119,6 +119,30 @@ func (f *FlagSet) DurationVar(val *time.Duration, key string, defaultVal time.Du
 	f.fs.DurationVar(val, key, defaultVal, help)
 }
 
+// String defines a string flag and returns a pointer to its value. See
+// [flag.FlagSet.String].
+func (f *FlagSet) String(key string, defaultVal string, help string) *string {
+	val := new(string)
+	f.StringVar(val, key, defaultVal, help)
+	return val
+}
+
+// Bool defines a bool flag and returns a pointer to its value. See
+// [flag.FlagSet.Bool].
+func (f *FlagSet) Bool(key string, defaultVal bool, help string) *bool {
+	val := new(bool)
+	f.BoolVar(val, key, defaultVal, help)
+	return val
+}
+
+// Int defines an int flag and returns a pointer to its value. See
+// [flag.FlagSet.Int].
+func (f *FlagSet) Int(key string, defaultVal int, help string) *int {
+	val := new(int)
+	f.IntVar(val, key, defaultVal, help)
+	return val
+}
+
 // Duration defines a time.Duration flag and returns a pointer to its value. See
 // [flag.FlagSet.Duration].
 func (f *FlagSet) Duration(key string, defaultVal time.Duration, help string) *time.Duration {
@@ -252,6 +276,24 @@ func IntVar(val *int, key string, defaultVal int, help string) {
 // DurationVar defines a time.Duration flag on [CommandLine]. See [flag.DurationVar].
 func DurationVar(val *time.Duration, key string, defaultVal time.Duration, help string) {
 	CommandLine.DurationVar(val, key, defaultVal, help)
+}
+
+// String defines a string flag on [CommandLine] and returns a pointer to its
+// value. See [flag.String].
+func String(key string, defaultVal string, help string) *string {
+	return CommandLine.String(key, defaultVal, help)
+}
+
+// Bool defines a bool flag on [CommandLine] and returns a pointer to its value.
+// See [flag.Bool].
+func Bool(key string, defaultVal bool, help string) *bool {
+	return CommandLine.Bool(key, defaultVal, help)
+}
+
+// Int defines an int flag on [CommandLine] and returns a pointer to its value.
+// See [flag.Int].
+func Int(key string, defaultVal int, help string) *int {
+	return CommandLine.Int(key, defaultVal, help)
 }
 
 // Duration defines a time.Duration flag on [CommandLine] and returns a pointer
