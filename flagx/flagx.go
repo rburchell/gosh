@@ -116,6 +116,12 @@ func (f *FlagSet) IntVar(val *int, key string, defaultVal int, help string) {
 	f.fs.IntVar(val, key, defaultVal, help)
 }
 
+// Float64Var defines a float64 flag. See [flag.FlagSet.Float64Var].
+func (f *FlagSet) Float64Var(val *float64, key string, defaultVal float64, help string) {
+	f.vars = append(f.vars, varRec{key, val, defaultVal, help})
+	f.fs.Float64Var(val, key, defaultVal, help)
+}
+
 // DurationVar defines a time.Duration flag. See [flag.FlagSet.DurationVar].
 func (f *FlagSet) DurationVar(val *time.Duration, key string, defaultVal time.Duration, help string) {
 	f.vars = append(f.vars, varRec{key, val, defaultVal, help})
@@ -143,6 +149,14 @@ func (f *FlagSet) Bool(key string, defaultVal bool, help string) *bool {
 func (f *FlagSet) Int(key string, defaultVal int, help string) *int {
 	val := new(int)
 	f.IntVar(val, key, defaultVal, help)
+	return val
+}
+
+// Float64 defines a float64 flag and returns a pointer to its value. See
+// [flag.FlagSet.Float64].
+func (f *FlagSet) Float64(key string, defaultVal float64, help string) *float64 {
+	val := new(float64)
+	f.Float64Var(val, key, defaultVal, help)
 	return val
 }
 
@@ -194,6 +208,13 @@ func assign(source, key, raw string, valPtr any) {
 			return
 		}
 		*tv = int(ival)
+	case *float64:
+		fval, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			log.Error("invalid float", "source", source, "key", key, "value", raw, "err", err)
+			return
+		}
+		*tv = fval
 	case *time.Duration:
 		d, err := time.ParseDuration(raw)
 		if err != nil {
@@ -284,6 +305,11 @@ func IntVar(val *int, key string, defaultVal int, help string) {
 	CommandLine.IntVar(val, key, defaultVal, help)
 }
 
+// Float64Var defines a float64 flag on [CommandLine]. See [flag.Float64Var].
+func Float64Var(val *float64, key string, defaultVal float64, help string) {
+	CommandLine.Float64Var(val, key, defaultVal, help)
+}
+
 // DurationVar defines a time.Duration flag on [CommandLine]. See [flag.DurationVar].
 func DurationVar(val *time.Duration, key string, defaultVal time.Duration, help string) {
 	CommandLine.DurationVar(val, key, defaultVal, help)
@@ -305,6 +331,12 @@ func Bool(key string, defaultVal bool, help string) *bool {
 // See [flag.Int].
 func Int(key string, defaultVal int, help string) *int {
 	return CommandLine.Int(key, defaultVal, help)
+}
+
+// Float64 defines a float64 flag on [CommandLine] and returns a pointer to its
+// value. See [flag.Float64].
+func Float64(key string, defaultVal float64, help string) *float64 {
+	return CommandLine.Float64(key, defaultVal, help)
 }
 
 // Duration defines a time.Duration flag on [CommandLine] and returns a pointer

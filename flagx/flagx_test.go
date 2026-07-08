@@ -53,20 +53,24 @@ func TestFromEnvironment(t *testing.T) {
 	var s string
 	var b bool
 	var i int
+	var fl float64
 	var d time.Duration
 
 	StringVar(&s, "str", "def", "help")
 	BoolVar(&b, "bool", false, "help")
 	IntVar(&i, "int", 1, "help")
+	Float64Var(&fl, "float", 1.5, "help")
 	DurationVar(&d, "dur", time.Second, "help")
 
 	os.Setenv("STR", "fromenv")
 	os.Setenv("BOOL", "true")
 	os.Setenv("INT", "2")
+	os.Setenv("FLOAT", "3.25")
 	os.Setenv("DUR", "5m")
 	defer os.Unsetenv("STR")
 	defer os.Unsetenv("BOOL")
 	defer os.Unsetenv("INT")
+	defer os.Unsetenv("FLOAT")
 	defer os.Unsetenv("DUR")
 
 	origArgs := os.Args
@@ -83,6 +87,9 @@ func TestFromEnvironment(t *testing.T) {
 	}
 	if i != 2 {
 		t.Errorf("expected int 2, got %d", i)
+	}
+	if fl != 3.25 {
+		t.Errorf("expected float 3.25, got %v", fl)
 	}
 	if d != 5*time.Minute {
 		t.Errorf("expected 5m, got %v", d)
@@ -233,9 +240,10 @@ func TestFlagSetValueHelpers(t *testing.T) {
 	s := fs.String("str", "def", "help")
 	b := fs.Bool("bool", false, "help")
 	i := fs.Int("int", 1, "help")
+	fl := fs.Float64("float", 1.5, "help")
 	d := fs.Duration("dur", time.Second, "help")
 
-	if err := fs.Parse([]string{"-str=fromcmd", "-bool=true", "-int=42", "-dur=2h"}); err != nil {
+	if err := fs.Parse([]string{"-str=fromcmd", "-bool=true", "-int=42", "-float=3.25", "-dur=2h"}); err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
 
@@ -247,6 +255,9 @@ func TestFlagSetValueHelpers(t *testing.T) {
 	}
 	if *i != 42 {
 		t.Errorf("expected int 42, got %d", *i)
+	}
+	if *fl != 3.25 {
+		t.Errorf("expected float 3.25, got %v", *fl)
 	}
 	if *d != 2*time.Hour {
 		t.Errorf("expected 2h, got %v", *d)
