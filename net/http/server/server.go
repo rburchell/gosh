@@ -40,9 +40,10 @@ var log *slog.Logger = slogx.NewCategory("http", slogx.TextHandler, slog.LevelDe
 
 // Builds a http.Handler, and optionally serves it.
 type Builder struct {
-	mux     *http.ServeMux
-	routes  []any
-	wrapped http.Handler
+	mux                      *http.ServeMux
+	routes                   []any
+	wrapped                  http.Handler
+	trustForwardedRequestIDs bool
 }
 
 // Starts a Builder using the base 'mux'. If nil is provided, uses http.NewServeMux().
@@ -66,6 +67,20 @@ func (b *Builder) HandleFunc(pattern string, handler http.HandlerFunc) *Builder 
 	return b
 }
 
+// TrustForwardedRequestIDs makes the built handler reuse request IDs from
+// the gosh tracing headers (see middleware.TagWithForwardedRequestID) instead
+// of always assigning local ones.
+//
+// This is a trust-boundary decision: enable it only when every client that
+// can reach the listener is trusted to supply tracing metadata, e.g. a
+// service bound to loopback behind a gosh gateway. Do not enable it on a
+// public-facing listener.
+func (b *Builder) TrustForwardedRequestIDs() *Builder {
+	b.trustForwardedRequestIDs = true
+	b.wrapped = nil // invalidate any previously built handler
+	return b
+}
+
 // Constructs the final http.Handler.
 //
 // If you want to use it right away, ListenAndServeOrDie might be useful.
@@ -74,7 +89,11 @@ func (b *Builder) Build() http.Handler {
 	// Remember that these are called bottom-up.. Order matters.
 	var wrapped http.Handler = b.mux
 	wrapped = middleware.LogRequests(wrapped)
-	wrapped = middleware.TagWithRequestID(wrapped)
+	if b.trustForwardedRequestIDs {
+		wrapped = middleware.TagWithForwardedRequestID(wrapped)
+	} else {
+		wrapped = middleware.TagWithRequestID(wrapped)
+	}
 	b.wrapped = wrapped
 	return wrapped
 }
