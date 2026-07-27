@@ -358,3 +358,25 @@ func TestFlagSetEnvOverlay(t *testing.T) {
 		t.Errorf("expected int 200 from environment overriding envkv, got %d", i)
 	}
 }
+
+func TestFlagSetRepeatedParseKeepsCommandLineOverEnvironment(t *testing.T) {
+	t.Setenv("ADDR", "from-env")
+	fs := NewFlagSet("t", ContinueOnError)
+	addr := fs.String("addr", "default", "help")
+
+	// Callers that support interspersed flags parse again after each positional.
+	// The environment is a fallback and must not overwrite a command-line value
+	// established before that positional.
+	if err := fs.Parse([]string{"-addr", "from-flag", "ARIJ-1"}); err != nil {
+		t.Fatalf("first Parse: %v", err)
+	}
+	if got := fs.Args(); len(got) != 1 || got[0] != "ARIJ-1" {
+		t.Fatalf("first Parse args = %v, want [ARIJ-1]", got)
+	}
+	if err := fs.Parse(fs.Args()[1:]); err != nil {
+		t.Fatalf("second Parse: %v", err)
+	}
+	if *addr != "from-flag" {
+		t.Errorf("addr after repeated Parse = %q, want command-line value", *addr)
+	}
+}

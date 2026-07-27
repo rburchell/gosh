@@ -69,10 +69,11 @@ const (
 )
 
 type varRec struct {
-	key        string
-	val        any
-	defaultVal any
-	help       string
+	key             string
+	val             any
+	defaultVal      any
+	help            string
+	fallbackApplied bool
 }
 
 // FlagSet represents a set of defined flags. It mirrors the subset of
@@ -100,31 +101,31 @@ func clearVars() {
 
 // StringVar defines a string flag. See [flag.FlagSet.StringVar].
 func (f *FlagSet) StringVar(val *string, key string, defaultVal string, help string) {
-	f.vars = append(f.vars, varRec{key, val, defaultVal, help})
+	f.vars = append(f.vars, varRec{key: key, val: val, defaultVal: defaultVal, help: help})
 	f.fs.StringVar(val, key, defaultVal, help)
 }
 
 // BoolVar defines a bool flag. See [flag.FlagSet.BoolVar].
 func (f *FlagSet) BoolVar(val *bool, key string, defaultVal bool, help string) {
-	f.vars = append(f.vars, varRec{key, val, defaultVal, help})
+	f.vars = append(f.vars, varRec{key: key, val: val, defaultVal: defaultVal, help: help})
 	f.fs.BoolVar(val, key, defaultVal, help)
 }
 
 // IntVar defines an int flag. See [flag.FlagSet.IntVar].
 func (f *FlagSet) IntVar(val *int, key string, defaultVal int, help string) {
-	f.vars = append(f.vars, varRec{key, val, defaultVal, help})
+	f.vars = append(f.vars, varRec{key: key, val: val, defaultVal: defaultVal, help: help})
 	f.fs.IntVar(val, key, defaultVal, help)
 }
 
 // Float64Var defines a float64 flag. See [flag.FlagSet.Float64Var].
 func (f *FlagSet) Float64Var(val *float64, key string, defaultVal float64, help string) {
-	f.vars = append(f.vars, varRec{key, val, defaultVal, help})
+	f.vars = append(f.vars, varRec{key: key, val: val, defaultVal: defaultVal, help: help})
 	f.fs.Float64Var(val, key, defaultVal, help)
 }
 
 // DurationVar defines a time.Duration flag. See [flag.FlagSet.DurationVar].
 func (f *FlagSet) DurationVar(val *time.Duration, key string, defaultVal time.Duration, help string) {
-	f.vars = append(f.vars, varRec{key, val, defaultVal, help})
+	f.vars = append(f.vars, varRec{key: key, val: val, defaultVal: defaultVal, help: help})
 	f.fs.DurationVar(val, key, defaultVal, help)
 }
 
@@ -249,7 +250,8 @@ func (f *FlagSet) Parse(args []string) error {
 
 	helplines := []string{}
 
-	for _, v := range f.vars {
+	for i := range f.vars {
+		v := &f.vars[i]
 		upperKey := strings.ToUpper(v.key)
 		if v.defaultVal != nil {
 			helplines = append(helplines, fmt.Sprintf("%s - %s (default %q)", upperKey, v.help, v.defaultVal))
@@ -257,16 +259,22 @@ func (f *FlagSet) Parse(args []string) error {
 			helplines = append(helplines, fmt.Sprintf("%s - %s", upperKey, v.help))
 		}
 
-		// 1. Write from envkv
-		for _, val := range envkvs {
-			if val.Key == upperKey {
-				assign("envkv", upperKey, val.Value, v.val)
+		// Environment sources are fallbacks, not per-Parse overlays. Apply them
+		// once so a later Parse (used by callers that allow interspersed flags)
+		// cannot overwrite a command-line value established by an earlier Parse.
+		if !v.fallbackApplied {
+			// 1. Write from envkv
+			for _, val := range envkvs {
+				if val.Key == upperKey {
+					assign("envkv", upperKey, val.Value, v.val)
+				}
 			}
-		}
 
-		// 2: Write from environment
-		if val, ok := os.LookupEnv(upperKey); ok {
-			assign("env", upperKey, val, v.val)
+			// 2: Write from environment
+			if val, ok := os.LookupEnv(upperKey); ok {
+				assign("env", upperKey, val, v.val)
+			}
+			v.fallbackApplied = true
 		}
 	}
 
