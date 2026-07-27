@@ -32,6 +32,22 @@ func TestBuilder_HandleFunc(t *testing.T) {
 	}
 }
 
+func TestBuilder_EnableLoggingForTests(t *testing.T) {
+	b := Build(nil)
+	if b.requestLogging {
+		t.Fatal("request logging should default to disabled under go test")
+	}
+
+	b.Build()
+	b.EnableLoggingForTests()
+	if !b.requestLogging {
+		t.Fatal("EnableLoggingForTests did not enable request logging")
+	}
+	if b.wrapped != nil {
+		t.Fatal("EnableLoggingForTests must invalidate the cached handler")
+	}
+}
+
 // buildAndServe runs one request through a built handler, capturing the IDs
 // the route observed.
 func buildAndServe(t *testing.T, b *Builder, mutate func(*http.Request)) (middleware.CID, middleware.RID) {

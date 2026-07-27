@@ -34,6 +34,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"testing"
 )
 
 var log *slog.Logger = slogx.NewCategory("http", slogx.TextHandler, slog.LevelDebug)
@@ -43,15 +44,24 @@ type Builder struct {
 	mux                      *http.ServeMux
 	routes                   []any
 	wrapped                  http.Handler
+	requestLogging           bool
 	trustForwardedRequestIDs bool
 }
 
-// Starts a Builder using the base 'mux'. If nil is provided, uses http.NewServeMux().
+// Starts a Builder using the base 'mux'. If nil is provided, uses
+// http.NewServeMux().
+//
+// Request logging is enabled by default in normal programs and disabled in
+// binaries built by "go test". Use EnableLoggingForTests to override that
+// default.
 func Build(mux *http.ServeMux) *Builder {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
-	return &Builder{mux: mux}
+	return &Builder{
+		mux:            mux,
+		requestLogging: !testing.Testing(),
+	}
 }
 
 // Adds a single route (pattern and handler) to the Builder.
@@ -64,6 +74,14 @@ func (b *Builder) Handle(pattern string, handler http.Handler) *Builder {
 func (b *Builder) HandleFunc(pattern string, handler http.HandlerFunc) *Builder {
 	b.mux.Handle(pattern, handler)
 	b.routes = append(b.routes, pattern)
+	return b
+}
+
+// EnableLoggingForTests enables request completion records in a binary built
+// by "go test". Use it when the access log is useful for diagnosing a test.
+func (b *Builder) EnableLoggingForTests() *Builder {
+	b.requestLogging = true
+	b.wrapped = nil // invalidate any previously built handler
 	return b
 }
 
@@ -88,7 +106,9 @@ func (b *Builder) Build() http.Handler {
 	// Wrap in middleware.
 	// Remember that these are called bottom-up.. Order matters.
 	var wrapped http.Handler = b.mux
-	wrapped = middleware.LogRequests(wrapped)
+	if b.requestLogging {
+		wrapped = middleware.LogRequests(wrapped)
+	}
 	if b.trustForwardedRequestIDs {
 		wrapped = middleware.TagWithForwardedRequestID(wrapped)
 	} else {
