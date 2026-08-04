@@ -5,12 +5,16 @@
 package middleware
 
 import (
+	"bufio"
 	"context"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 )
 
 // logCapture is a slog.Handler that records everything, for asserting on
@@ -34,6 +38,13 @@ func (h *logCapture) count() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return len(h.records)
+}
+
+// message returns the log message of record i.
+func (h *logCapture) message(i int) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.records[i].Message
 }
 
 // attr returns the value of the named attribute on record i, if present.
@@ -300,6 +311,130 @@ func TestLogRequests_Panic(t *testing.T) {
 			t.Errorf("expected no records, got %d", capture.count())
 		}
 	})
+}
+
+// A handler that hijacks before starting a response should log the
+// takeover immediately with an unknown status, then log the full lifetime
+// when it closes the returned connection.
+func TestLogRequests_HijackLifetime(t *testing.T) {
+	capture := captureRequestLog(t)
+
+	const (
+		upgradeResp = "HTTP/1.1 101 Switching Protocols\r\n\r\n"
+		payload     = "hello"
+	)
+
+	handlerDone := make(chan struct{})
+	var readErr error
+	var readN int
+	h := LogRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(handlerDone)
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			readErr = err
+			return
+		}
+		defer conn.Close()
+		io.WriteString(conn, upgradeResp)
+		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		buf := make([]byte, len(payload))
+		readN, readErr = io.ReadFull(conn, buf)
+	}))
+
+	server := httptest.NewServer(h)
+	defer server.Close()
+
+	conn, err := net.Dial("tcp", server.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	// A conforming client must wait for the server's handshake response before
+	// sending any further data (RFC 6455 §4.1).
+	io.WriteString(conn, "GET /ws HTTP/1.1\r\nHost: x\r\n\r\n")
+	if _, err := io.ReadFull(conn, make([]byte, len(upgradeResp))); err != nil {
+		t.Fatalf("read upgrade response: %v", err)
+	}
+	io.WriteString(conn, payload)
+
+	<-handlerDone
+	if readErr != nil {
+		t.Fatalf("handler read %d bytes then errored: %v", readN, readErr)
+	}
+
+	// Wait for Close to emit the "Closed" record.
+	deadline := time.Now().Add(2 * time.Second)
+	for capture.count() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("expected Hijacked+Closed records, got %d", capture.count())
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// Takeover then close. The raw response status is not observable.
+	if capture.count() != 2 {
+		t.Fatalf("expected exactly Hijacked+Closed, got %d records", capture.count())
+	}
+	if m := capture.message(0); m != "Hijacked" {
+		t.Errorf("record 0 message = %q, want Hijacked", m)
+	}
+	if m := capture.message(1); m != "Closed" {
+		t.Errorf("record 1 message = %q, want Closed", m)
+	}
+	for i := range 2 {
+		if v, _ := capture.attr(i, "status"); v.Int64() != 0 {
+			t.Errorf("record %d status = %d, want unknown status 0", i, v.Int64())
+		}
+	}
+
+	if duration, ok := capture.attr(1, "duration"); !ok || duration.Duration() <= 0 {
+		t.Errorf("Closed duration = %v, want positive connection lifetime", duration)
+	}
+}
+
+// A handler that starts a response before hijacking should retain that
+// status in both lifecycle records and must not emit a Finished record
+// when ServeHTTP returns.
+func TestLogRequests_HijackPreservesStartedStatus(t *testing.T) {
+	capture := captureRequestLog(t)
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	h := LogRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+		conn.Close()
+	}))
+	h.ServeHTTP(&hijackResponseWriter{Conn: serverConn}, httptest.NewRequest("GET", "/", nil))
+
+	if capture.count() != 2 {
+		t.Fatalf("expected exactly Hijacked+Closed, got %d records", capture.count())
+	}
+	if m := capture.message(0); m != "Hijacked" {
+		t.Errorf("record 0 message = %q, want Hijacked", m)
+	}
+	if m := capture.message(1); m != "Closed" {
+		t.Errorf("record 1 message = %q, want Closed", m)
+	}
+	for i := range 2 {
+		if v, _ := capture.attr(i, "status"); v.Int64() != http.StatusAccepted {
+			t.Errorf("record %d status = %d, want %d", i, v.Int64(), http.StatusAccepted)
+		}
+	}
+}
+
+type hijackResponseWriter struct {
+	net.Conn
+}
+
+func (*hijackResponseWriter) Header() http.Header         { return make(http.Header) }
+func (*hijackResponseWriter) WriteHeader(int)             {}
+func (*hijackResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
+func (w *hijackResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return w.Conn, bufio.NewReadWriter(bufio.NewReader(w.Conn), bufio.NewWriter(w.Conn)), nil
 }
 
 func TestGetClientIP(t *testing.T) {

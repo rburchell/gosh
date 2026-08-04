@@ -5,6 +5,7 @@
 package server
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -45,6 +46,44 @@ func TestBuilder_EnableLoggingForTests(t *testing.T) {
 	}
 	if b.wrapped != nil {
 		t.Fatal("EnableLoggingForTests must invalidate the cached handler")
+	}
+}
+
+func TestBuilder_RequestLoggerPreservesHijacker(t *testing.T) {
+	b := Build(nil).EnableLoggingForTests()
+	b.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer does not implement http.Hijacker")
+			return
+		}
+		// Exercise the takeover, not just the interface: a Hijack that
+		// returned http.ErrNotSupported would still satisfy the assertion
+		// above. Write a minimal response over the raw connection so the
+		// client's request completes.
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Errorf("hijack through request logger: %v", err)
+			return
+		}
+		defer conn.Close()
+		io.WriteString(conn, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nhi")
+	})
+
+	server := httptest.NewServer(b.Build())
+	defer server.Close()
+
+	response, err := http.Get(server.URL + "/ws")
+	if err != nil {
+		t.Fatalf("request through builder: %v", err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read hijacked response: %v", err)
+	}
+	if string(body) != "hi" {
+		t.Errorf("body over hijacked connection = %q, want %q", body, "hi")
 	}
 }
 
